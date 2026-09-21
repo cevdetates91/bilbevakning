@@ -1,0 +1,39 @@
+{
+  "sokkriterier": {
+    "pris_fran": 15000,
+    "pris_till": 55000,
+    "ar_fran": 2008,
+    "ar_till": 2026,
+    "max_miltal": 17000,
+    "marken": [],
+    "sokningar": [
+      { "regioner": ["STOCKHOLM"], "endast_orter": [] },
+      { "regioner": ["UPPSALA"], "endast_orter": [] },
+      { "regioner": ["SODERMANLAND"], "endast_orter": ["Nyköping"] },
+      { "regioner": ["VASTMANLAND"], "endast_orter": ["Västerås"] }
+    ]
+  },
+  "analys": {
+    "min_annonser_for_jamforelse": 4,
+    "undervarderad_procent": 20,
+    "kontrollera_skador": true,
+    "varna_diesel_korta_strackor": true,
+    "kamrem_varningsgrans_mil": 15000,
+    "max_skadekontroller_per_korning": 150
+  },
+  "korning": {
+    "kontrollera_varje_timme": 1,
+    "max_sidor_per_sokning": 15
+  },
+  "visning": {
+    "oppna_automatiskt_vid_nya_kap": false
+  },
+  "epost": {
+    "aktiverat": false,
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 465,
+    "avsandare": "",
+    "app_losenord": "",
+    "mottagare": ""
+  }
+}
