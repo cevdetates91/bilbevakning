@@ -68,6 +68,7 @@ class Annons:
     url: str
     regnr: str | None = None
     drivmedel: str | None = None
+    saljartyp: str | None = None
     ovrig_text: str = ""
 
 
@@ -203,6 +204,7 @@ def normalisera_annons(rad: dict) -> Annons | None:
 
     regnr = _forsta_varde(d, "regno", "regnr")
     drivmedel = _forsta_varde(d, "fuel") or _parametervarde(parametrar, "drivmedel", "bränsle")
+    saljartyp = _forsta_varde(d, "dealer_segment", "seller_type")
 
     url = (_forsta_varde(d, "canonical_url", "url")
            or f"https://www.blocket.se/mobility/item/{ad_id}")
@@ -218,6 +220,7 @@ def normalisera_annons(rad: dict) -> Annons | None:
         ar=ar, miltal=miltal, plats=plats, url=url,
         regnr=str(regnr) if regnr else None,
         drivmedel=str(drivmedel) if drivmedel else None,
+        saljartyp=str(saljartyp) if saljartyp else None,
         ovrig_text=ovrig,
     )
 
@@ -269,6 +272,11 @@ def hamta_annonser(cfg: dict, spara_raw: bool = False) -> list[Annons]:
                 continue
         if a.miltal is not None and sok.get("max_miltal") is not None:
             if a.miltal > sok["max_miltal"]:
+                continue
+        if sok.get("endast_privatsaljare", True) and a.saljartyp:
+            # Vi utesluter bara om vi FAKTISKT vet att det är en handlare/företag
+            # (okänd/saknad säljartyp behåller vi hellre, för säkerhets skull).
+            if a.saljartyp.strip().lower() not in ("privat", "private", "privatperson"):
                 continue
         resultat.append(a)
 
@@ -590,13 +598,39 @@ PLUS_SIGNALER = [
     ("nybytt", "Har nybytta delar enligt annonsen"),
 ]
 
+# Mindre allvarliga saker – visas som neutral info, räknas INTE mot
+# "med anmärkning"-tröskeln (t.ex. en stenskott/mindre rutspricka är
+# vanligt och oftast billigt att fixa, inte en dealbreaker).
+SMA_ANMARKNINGAR = [
+    ("spricka i vindrutan", "Spricka i vindrutan nämnd (kolla storlek/läge vid visning)"),
+    ("spricka i rutan", "Spricka i en ruta nämnd (kolla storlek/läge vid visning)"),
+    ("sprucken ruta", "Spricka i en ruta nämnd (kolla storlek/läge vid visning)"),
+    ("stenskott", "Stenskott i vindrutan nämnt"),
+]
+
 MINUS_SIGNALER = [
-    ("spricka i vindrutan", "Spricka i vindrutan"),
-    ("stenskott", "Stenskott i vindrutan"),
     ("rost", "Rost nämnt i annonsen"),
     ("oljeläck", "Oljeläckage nämnt"),
     ("ac funkar ej", "AC fungerar ej"),
     ("ej fungerande ac", "AC fungerar ej"),
+    ("ac behöver fyllas", "AC behöver fyllas på – tyder ofta på läckage i kondensor/rör, inte bara låg gasnivå (räkna med 4 000–7 000 kr i reparation)"),
+    ("ac behövs fyllas", "AC behöver fyllas på – tyder ofta på läckage i kondensor/rör, inte bara låg gasnivå (räkna med 4 000–7 000 kr i reparation)"),
+    ("ac ej testad", "AC ej testad – okänt skick, räkna med att den kan behöva åtgärdas"),
+    ("ac inte testad", "AC ej testad – okänt skick, räkna med att den kan behöva åtgärdas"),
+    ("saknar kylmedia", "AC saknar kylmedia – troligen läckage, inte bara påfyllningsbehov"),
+    ("kopplingen kan behöva", "Kopplingen nämns kunna behöva åtgärdas snart – dyr reparation (5 000–15 000 kr)"),
+    ("kopplingen börjar", "Kopplingen nämns börja ta slut – dyr reparation (5 000–15 000 kr)"),
+    ("bromsarna börjar", "Bromsarna nämns börja bli slitna"),
+    ("snart dags för bromsar", "Bromsbyte nämns vara nära förestående"),
+    ("däcken är slitna", "Däck nämns vara slitna – ny uppsättning kostar ofta 4 000–8 000 kr"),
+    ("däck behöver bytas", "Däck nämns behöva bytas snart"),
+    ("elfönster fungerar ej", "Elfönster fungerar ej"),
+    ("fönsterhiss trasig", "Fönsterhiss trasig"),
+    ("centrallås fungerar ej", "Centrallås fungerar ej"),
+    ("servostyrning", "Servostyrning nämns i samband med problem – läs texten noga"),
+    ("hörs lite", "Säljaren nämner att något 'hörs lite' – läs texten noga, ofta en förskönande omskrivning"),
+    ("kan behöva ses över", "Säljaren nämner att något 'kan behöva ses över' – vag formulering värd att fråga om"),
+    ("i befintligt skick", "Säljs i befintligt skick – inga garantier om fel som upptäcks efteråt"),
     ("motorlampa", "Motorlampa lyser/har lyst"),
     ("anmärkning", "Besiktigad med anmärkning"),
     ("tusen mil kvar", "Säljaren nämner begränsad återstående livslängd på en del"),
@@ -664,6 +698,7 @@ def analysera_djupare(annons: Annons) -> dict:
 
     plus = [text for nyckel, text in PLUS_SIGNALER if _traff_utan_negation(kombinerad, nyckel)]
     minus = [text for nyckel, text in MINUS_SIGNALER if _traff_utan_negation(kombinerad, nyckel)]
+    info_lista = [text for nyckel, text in SMA_ANMARKNINGAR if _traff_utan_negation(kombinerad, nyckel)]
 
     antal_agare = None
     m = re.search(r"(\d+)\s*(?:tidigare\s*|st\s*)?ägare", kombinerad)
@@ -679,6 +714,7 @@ def analysera_djupare(annons: Annons) -> dict:
         "kanda_problem": kanda_problem,
         "plus": plus,
         "minus": minus,
+        "info": info_lista,
         "antal_agare": antal_agare,
     }
 
@@ -736,7 +772,11 @@ def analysera_kandidater(
 
     for i, (annons, median, procent) in enumerate(kap):
         if not kor_djupanalys or i >= max_kontroller:
-            info: dict = {}
+            # Djupanalys kördes INTE (för många kandidater denna körning, eller
+            # avstängt i config). Vi vet då INGET om skador/skick – och ska
+            # absolut inte anta att bilen är "ren". Markera tydligt som
+            # oanalyserad så den inte felaktigt hamnar i Toppkap.
+            info: dict = {"ej_analyserad": True}
             tillampa_universella_kontroller(annons, info, cfg)
             ok.append((annons, median, procent, info))
             continue
@@ -765,9 +805,10 @@ def dela_in_i_nivaer(
     toppkap = []
     med_anmarkning = []
     for annons, median, procent, info in ok_kap:
+        ej_analyserad = bool(info.get("ej_analyserad"))
         har_kant_problem = bool(info.get("kanda_problem"))
         antal_minus = len(info.get("minus") or [])
-        if har_kant_problem or antal_minus >= 2:
+        if ej_analyserad or har_kant_problem or antal_minus >= 2:
             med_anmarkning.append((annons, median, procent, info))
         else:
             toppkap.append((annons, median, procent, info))
@@ -788,11 +829,18 @@ def _kap_kort_html(annons: Annons, median: float, procent: int, info: dict, nya_
     )
 
     djupanalys_html = ""
+    ej_analyserad = bool(info.get("ej_analyserad"))
     kanda_problem = info.get("kanda_problem") or []
     plus = info.get("plus") or []
     minus = info.get("minus") or []
     neutral_info = info.get("info") or []
-    if kanda_problem or plus or minus or neutral_info:
+    if ej_analyserad:
+        djupanalys_html = """
+        <div class="djupanalys">
+          <div class="problemvarning">⏳ Hann inte djupanalyseras denna körning (för många kandidater samtidigt) –
+          annonstexten är INTE kontrollerad för skador/skick. Läs annonsen själv innan du litar på den.</div>
+        </div>"""
+    elif kanda_problem or plus or minus or neutral_info:
         problem_html = "".join(f'<div class="problemvarning">⚠️ {v}</div>' for v in kanda_problem)
         info_html = "".join(f'<div class="neutralinfo">ℹ️ {v}</div>' for v in neutral_info)
         plus_html = "".join(f'<li class="plus">+ {p}</li>' for p in plus)
