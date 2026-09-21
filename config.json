@@ -15,7 +15,7 @@
   },
   "analys": {
     "min_annonser_for_jamforelse": 4,
-    "undervarderad_procent": 20,
+    "undervarderad_procent": 15,
     "kontrollera_skador": true,
     "varna_diesel_korta_strackor": true,
     "kamrem_varningsgrans_mil": 15000,
@@ -23,7 +23,7 @@
   },
   "korning": {
     "kontrollera_varje_timme": 1,
-    "max_sidor_per_sokning": 15
+    "max_sidor_per_sokning": 20
   },
   "visning": {
     "oppna_automatiskt_vid_nya_kap": false
